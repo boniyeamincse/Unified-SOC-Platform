@@ -1,0 +1,12 @@
+play.modules.enabled += "org.thp.thehive.connector.cortex.CortexConnector"
+
+cortex {
+  "url" = "http://cortex:9001"
+  "key" = "supersecretapikey"
+}
+
+index.type = "elasticsearch"
+index.elasticsearch {
+  "cluster" = "hive"
+  "hosts" = [ "http://elasticsearch:9200" ]
+}

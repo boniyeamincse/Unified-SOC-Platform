@@ -1,0 +1,14 @@
+wazuh_config:
+  syscheck:
+    frequency: 7200
+    scan_on_start: yes
+  rootcheck:
+    disabled: no
+  global:
+    email_notification: yes
+    smtp_server: smtp.example.com
+    email_to: soc@example.com
+    email_from: wazuh@example.com
+  rules:
+    include:
+      - rules_config.xml

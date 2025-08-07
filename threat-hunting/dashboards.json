@@ -1,0 +1,13 @@
+[
+  {
+    "_id": "threat-hunting-overview",
+    "_type": "dashboard",
+    "_source": {
+      "title": "Threat Hunting Overview",
+      "description": "Wazuh Alerts, MITRE mapping, source IP, destination IP etc.",
+      "panelsJSON": "[ ... large JSON structure ... ]",
+      "uiStateJSON": "{}",
+      "version": 1
+    }
+  }
+]

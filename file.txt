@@ -1,0 +1,60 @@
+docker-soc-platform/
+├── .env                            # Environment variables (versions, ports)
+├── docker-compose.yml             # Unified docker stack (Wazuh, Elastic, TheHive, Cortex, MISP, Ollama)
+├── README.md                      # Full documentation and usage guide
+
+├── scripts/
+│   ├── init.sh                    # 🔥 One-click installer (pulls models, starts stack)
+│   └── cleanup.sh                 # Docker cleanup script
+
+├── wazuh/
+│   ├── Dockerfile
+│   └── wazuh.yml                  # Wazuh configuration (syscheck, alerts, smtp etc.)
+
+├── elasticsearch/
+│   ├── Dockerfile
+│   └── elasticsearch.yml
+
+├── kibana/
+│   ├── Dockerfile
+│   └── kibana.yml                 # Kibana config with Wazuh plugin
+
+├── logstash/
+│   ├── Dockerfile
+│   └── logstash.conf              # Pipeline: input (beats), filter (tagging), output (elastic)
+
+├── ai-engine/
+│   ├── Dockerfile
+│   ├── model.py                   # 🤖 AI logic: anomaly detection, summarization
+│   ├── requirements.txt
+│   └── sample_logs.csv            # Optional: Test data
+
+├── threat-hunting/
+│   ├── dashboards.json            # Kibana dashboards (prebuilt)
+│   └── queries.kql                # Saved KQL search queries
+
+├── threat-intel/
+│   ├── docker-compose.override.yml  # Optional if misp uses special settings
+│   ├── thehive/
+│   │   ├── Dockerfile
+│   │   └── application.conf        # TheHive config + Cortex connector
+│   ├── cortex/
+│   │   ├── Dockerfile
+│   │   └── application.conf        # Cortex config + analyzers path
+│   ├── misp/
+│   │   └── docker-compose.override.yml (optional)
+│   └── analyzers/
+│       └── misp-analyzer/         # Cortex analyzer for MISP
+
+├── configs/
+│   ├── alert-rules.yml            # Custom detection rules (Sigma-style)
+│   ├── users.conf                 # RBAC users for Wazuh or TheHive
+│   └── api-keys.conf              # API keys for Cortex/MISP integrations
+
+├── ollama/
+│   ├── ollama.sh                  # Script to preload models (e.g. llama3)
+│   └── ollama-config.json         # Optional model config for Ollama
+
+└── docs/
+    ├── architecture-diagram.png   # 📊 System overview image
+    └── deployment-guide.md        # How to deploy, customize, and extend

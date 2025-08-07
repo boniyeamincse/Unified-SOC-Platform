@@ -1,0 +1,66 @@
+version: "3.8"
+
+services:
+  wazuh:
+    build: ./wazuh
+    ports:
+      - "${WAZUH_PORT}:55000"
+    volumes:
+      - wazuh_data:/var/ossec
+    networks:
+      - soc-net
+
+  elasticsearch:
+    build: ./elasticsearch
+    environment:
+      - discovery.type=single-node
+    networks:
+      - soc-net
+
+  kibana:
+    build: ./kibana
+    ports:
+      - "${KIBANA_PORT}:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - soc-net
+
+  logstash:
+    build: ./logstash
+    volumes:
+      - ./logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+    depends_on:
+      - elasticsearch
+    networks:
+      - soc-net
+
+  soar:
+    build: ./soar
+    networks:
+      - soc-net
+
+  ai-engine:
+    build: ./ai-engine
+    networks:
+      - soc-net
+
+volumes:
+  wazuh_data:
+
+networks:
+  soc-net:
+
+services:
+  ollama:
+    image: ollama/ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - soc-net
+
+volumes:
+  wazuh_data:
+  ollama_data:
