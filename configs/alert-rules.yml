@@ -1,0 +1,209 @@
+# SOC Platform Alert Rules Configuration
+# Based on MITRE ATT&CK Framework and industry best practices
+
+# Authentication & Access Control Rules
+authentication:
+  - name: "Multiple Failed Login Attempts"
+    description: "Detect brute force attacks"
+    severity: "high"
+    rule: |
+      source.ip: * AND event.outcome: failure AND event.category: authentication
+    threshold:
+      count: 5
+      timeframe: "5m"
+    mitre_attack:
+      - "T1110 - Brute Force"
+  
+  - name: "Privileged Account Login"
+    description: "Monitor admin account access"
+    severity: "medium"
+    rule: |
+      user.name: (admin OR root OR administrator) AND event.category: authentication
+    threshold:
+      count: 1
+      timeframe: "1m"
+    mitre_attack:
+      - "T1078 - Valid Accounts"
+
+  - name: "Login from Suspicious Location"
+    description: "Detect logins from unusual geolocations"
+    severity: "medium"
+    rule: |
+      source.geo.country_name: NOT ("United States" OR "Canada") AND event.outcome: success
+    threshold:
+      count: 1
+      timeframe: "1m"
+    mitre_attack:
+      - "T1078 - Valid Accounts"
+
+# Network Security Rules
+network:
+  - name: "Suspicious Outbound Traffic"
+    description: "Detect potential data exfiltration"
+    severity: "high"
+    rule: |
+      destination.port: (443 OR 80) AND network.bytes: >10485760
+    threshold:
+      count: 1
+      timeframe: "5m"
+    mitre_attack:
+      - "T1041 - Exfiltration Over C2 Channel"
+  
+  - name: "Port Scanning Activity"
+    description: "Detect network reconnaissance"
+    severity: "medium"
+    rule: |
+      network.transport: tcp AND destination.port: [1-65535]
+    threshold:
+      count: 100
+      timeframe: "1m"
+    mitre_attack:
+      - "T1046 - Network Service Scanning"
+
+  - name: "DNS Tunneling Detection"
+    description: "Detect DNS-based data exfiltration"
+    severity: "high"
+    rule: |
+      dns.question.name.length: >50 AND dns.question.type: TXT
+    threshold:
+      count: 10
+      timeframe: "1m"
+    mitre_attack:
+      - "T1071.004 - Application Layer Protocol: DNS"
+
+# Malware & Threat Detection
+malware:
+  - name: "Known Malware Hash"
+    description: "Detect known malicious file hashes"
+    severity: "critical"
+    rule: |
+      file.hash.sha256: ("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" OR "malicious_hash_here")
+    threshold:
+      count: 1
+      timeframe: "1m"
+    mitre_attack:
+      - "T1566 - Phishing"
+  
+  - name: "Suspicious Process Execution"
+    description: "Detect unusual process activities"
+    severity: "high"
+    rule: |
+      process.name: ("powershell.exe" OR "cmd.exe" OR "bash") AND process.args: ("-enc" OR "-e" OR "IEX" OR "wget" OR "curl")
+    threshold:
+      count: 1
+      timeframe: "1m"
+    mitre_attack:
+      - "T1059 - Command and Scripting Interpreter"
+
+# File Integrity Monitoring
+file_integrity:
+  - name: "System File Modification"
+    description: "Monitor critical system file changes"
+    severity: "high"
+    rule: |
+      file.path: ("/etc/passwd" OR "/etc/shadow" OR "/etc/hosts" OR "C:\\Windows\\System32\\*")
+    threshold:
+      count: 1
+      timeframe: "1m"
+    mitre_attack:
+      - "T1562 - Impair Defenses"
+  
+  - name: "Web Shell Detection"
+    description: "Detect web shell uploads"
+    severity: "critical"
+    rule: |
+      file.extension: ("php" OR "jsp" OR "asp" OR "aspx") AND file.path: */var/www/* AND file.size: <10240
+    threshold:
+      count: 1
+      timeframe: "1m"
+    mitre_attack:
+      - "T1505.003 - Server Software Component: Web Shell"
+
+# Data Loss Prevention
+data_protection:
+  - name: "Credit Card Number Detected"
+    description: "Detect potential credit card data exposure"
+    severity: "high"
+    rule: |
+      message: /\b(?:\d{4}[\s-]?){3}\d{4}\b/
+    threshold:
+      count: 1
+      timeframe: "1m"
+    mitre_attack:
+      - "T1005 - Data from Local System"
+  
+  - name: "SSN Pattern Detected"
+    description: "Detect potential SSN exposure"
+    severity: "high"
+    rule: |
+      message: /\b\d{3}-\d{2}-\d{4}\b/
+    threshold:
+      count: 1
+      timeframe: "1m"
+    mitre_attack:
+      - "T1005 - Data from Local System"
+
+# Cloud Security Rules
+cloud:
+  - name: "AWS Root Account Usage"
+    description: "Monitor AWS root account activities"
+    severity: "critical"
+    rule: |
+      cloud.provider: "aws" AND user.name: "root"
+    threshold:
+      count: 1
+      timeframe: "1m"
+    mitre_attack:
+      - "T1078.004 - Valid Accounts: Cloud Accounts"
+  
+  - name: "Unusual API Activity"
+    description: "Detect abnormal cloud API usage"
+    severity: "medium"
+    rule: |
+      event.category: "web" AND http.request.method: ("DELETE" OR "PUT") AND http.response.status_code: [200-299]
+    threshold:
+      count: 50
+      timeframe: "5m"
+    mitre_attack:
+      - "T1098 - Account Manipulation"
+
+# System Monitoring
+system:
+  - name: "High CPU Usage"
+    description: "Monitor system performance anomalies"
+    severity: "medium"
+    rule: |
+      system.cpu.total.pct: >0.90
+    threshold:
+      count: 5
+      timeframe: "5m"
+    mitre_attack:
+      - "T1496 - Resource Hijacking"
+  
+  - name: "Memory Exhaustion"
+    description: "Detect potential DoS conditions"
+    severity: "high"
+    rule: |
+      system.memory.actual.used.pct: >0.95
+    threshold:
+      count: 3
+      timeframe: "1m"
+    mitre_attack:
+      - "T1499 - Endpoint Denial of Service"
+
+# Alert Configuration
+alert_settings:
+  notification_channels:
+    - email: "soc@company.com"
+    - slack: "#security-alerts"
+    - webhook: "https://api.company.com/security/alerts"
+  
+  escalation:
+    critical: "immediate"
+    high: "15m"
+    medium: "1h"
+    low: "4h"
+  
+  retention:
+    days: 90
+    archive_after_days: 30

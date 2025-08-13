@@ -1,4 +1,62 @@
+# Network Configuration
 network.host: 0.0.0.0
 http.port: 9200
-xpack.security.enabled: false
+transport.port: 9300
+
+# Cluster Configuration
+cluster.name: soc-elasticsearch
+node.name: soc-node-1
 discovery.type: single-node
+
+# Security Configuration
+xpack.security.enabled: true
+xpack.security.enrollment.enabled: true
+xpack.security.http.ssl.enabled: true
+xpack.security.http.ssl.key: /usr/share/elasticsearch/config/certs/elasticsearch.key
+xpack.security.http.ssl.certificate: /usr/share/elasticsearch/config/certs/elasticsearch.crt
+xpack.security.http.ssl.certificate_authorities: /usr/share/elasticsearch/config/certs/ca.crt
+xpack.security.transport.ssl.enabled: true
+xpack.security.transport.ssl.key: /usr/share/elasticsearch/config/certs/elasticsearch.key
+xpack.security.transport.ssl.certificate: /usr/share/elasticsearch/config/certs/elasticsearch.crt
+xpack.security.transport.ssl.certificate_authorities: /usr/share/elasticsearch/config/certs/ca.crt
+xpack.security.transport.ssl.verification_mode: certificate
+
+# Authentication
+xpack.security.authc.password_hashing.algorithm: pbkdf2_stretch
+xpack.security.authc.token.enabled: true
+xpack.security.authc.api_key.enabled: true
+
+# Audit Logging
+xpack.security.audit.enabled: true
+xpack.security.audit.logfile.events.include:
+  - access_denied
+  - access_granted
+  - anonymous_access_denied
+  - authentication_failed
+  - connection_denied
+  - tampered_request
+  - run_as_denied
+  - run_as_granted
+
+# Performance and Resource Limits
+bootstrap.memory_lock: true
+indices.memory.index_buffer_size: 20%
+indices.queries.cache.size: 10%
+indices.fielddata.cache.size: 20%
+
+# Logging
+logger.level: INFO
+logger.org.elasticsearch.transport: WARN
+logger.org.elasticsearch.discovery: WARN
+
+# Index Management
+action.destructive_requires_name: true
+action.auto_create_index: .monitoring*,.watches,.triggered_watches,.watcher-history*,.ml*
+
+# Security Headers
+http.cors.enabled: false
+http.cors.allow-origin: ""
+
+# Thread Pools
+thread_pool.write.queue_size: 1000
+thread_pool.search.queue_size: 1000
