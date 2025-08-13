@@ -1,0 +1,6 @@
+nohup: ignoring input
+
+> soc-platform-ui@1.0.0 start
+> node server.js
+
+🛡️ SOC Platform UI running at http://localhost:3000

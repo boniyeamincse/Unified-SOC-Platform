@@ -1,0 +1,231 @@
+version: "3.8"
+
+services:
+  wazuh:
+    build: ./wazuh
+    ports:
+      - "127.0.0.1:${WAZUH_PORT}:55000"
+    volumes:
+      - wazuh_data:/var/ossec:rw
+      - ./configs/wazuh-certs:/etc/ssl/certs:ro
+    environment:
+      - WAZUH_CLUSTER_DISABLED=yes
+      - WAZUH_INDEXER_PASSWORD=${WAZUH_PASSWORD}
+      - API_USER=${WAZUH_API_USER}
+      - API_PASSWORD=${WAZUH_API_PASSWORD}
+    networks:
+      - soc-backend
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+    security_opt:
+      - no-new-privileges:true
+    user: "1001:1001"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=100m
+
+  elasticsearch:
+    build: ./elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.certificate=/usr/share/elasticsearch/config/certs/elasticsearch.crt
+      - xpack.security.http.ssl.key=/usr/share/elasticsearch/config/certs/elasticsearch.key
+      - xpack.security.http.ssl.certificate_authorities=/usr/share/elasticsearch/config/certs/ca.crt
+      - xpack.security.transport.ssl.certificate=/usr/share/elasticsearch/config/certs/elasticsearch.crt
+      - xpack.security.transport.ssl.key=/usr/share/elasticsearch/config/certs/elasticsearch.key
+      - xpack.security.transport.ssl.certificate_authorities=/usr/share/elasticsearch/config/certs/ca.crt
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - ES_JAVA_OPTS=-Xms2g -Xmx2g
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data:rw
+      - ./configs/elasticsearch-certs:/usr/share/elasticsearch/config/certs:ro
+    networks:
+      - soc-backend
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+    security_opt:
+      - no-new-privileges:true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+
+  kibana:
+    build: ./kibana
+    ports:
+      - "127.0.0.1:${KIBANA_PORT}:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=https://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD}
+      - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=/usr/share/kibana/config/certs/ca.crt
+      - SERVER_SSL_ENABLED=true
+      - SERVER_SSL_CERTIFICATE=/usr/share/kibana/config/certs/kibana.crt
+      - SERVER_SSL_KEY=/usr/share/kibana/config/certs/kibana.key
+      - XPACK_SECURITY_ENABLED=true
+      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=${KIBANA_ENCRYPTION_KEY}
+    volumes:
+      - ./configs/kibana-certs:/usr/share/kibana/config/certs:ro
+    depends_on:
+      - elasticsearch
+    networks:
+      - soc-backend
+      - soc-frontend
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+    security_opt:
+      - no-new-privileges:true
+
+  logstash:
+    build: ./logstash
+    volumes:
+      - ./logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+      - ./configs/logstash-certs:/usr/share/logstash/config/certs:ro
+    environment:
+      - ELASTICSEARCH_PASSWORD=${ELASTIC_PASSWORD}
+    depends_on:
+      - elasticsearch
+    networks:
+      - soc-backend
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+    security_opt:
+      - no-new-privileges:true
+
+  soar:
+    build: ./soar
+    ports:
+      - "127.0.0.1:9000:9000"
+    environment:
+      - CORTEX_URL=http://cortex:9001
+      - CORTEX_KEY=${CORTEX_API_KEY}
+      - ELASTICSEARCH_PASSWORD=${ELASTIC_PASSWORD}
+    networks:
+      - soc-backend
+      - soc-frontend
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+    security_opt:
+      - no-new-privileges:true
+
+  cortex:
+    image: thehiveproject/cortex:3.1.7
+    ports:
+      - "127.0.0.1:9001:9001"
+    environment:
+      - CORTEX_SECRET=${CORTEX_SECRET}
+    volumes:
+      - cortex_data:/var/lib/cortex:rw
+    networks:
+      - soc-backend
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+    security_opt:
+      - no-new-privileges:true
+
+  ai-engine:
+    build: ./ai-engine
+    environment:
+      - MODEL_PATH=/models
+      - API_KEY=${AI_ENGINE_API_KEY}
+    volumes:
+      - ai_models:/models:rw
+    networks:
+      - soc-backend
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+    security_opt:
+      - no-new-privileges:true
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama:rw
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+      - OLLAMA_HOST=0.0.0.0:11434
+    networks:
+      - soc-backend
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '4.0'
+    security_opt:
+      - no-new-privileges:true
+
+  nginx:
+    build: ./nginx
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./configs/nginx-certs:/etc/ssl/certs:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - kibana
+      - soar
+    networks:
+      - soc-frontend
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  wazuh_data:
+  elasticsearch_data:
+  ollama_data:
+  cortex_data:
+  ai_models:
+
+networks:
+  soc-backend:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+  soc-frontend:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/24

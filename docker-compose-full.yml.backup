@@ -1,0 +1,373 @@
+services:
+  # Elasticsearch for SIEM
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.0
+    hostname: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - soc-net
+    ports:
+      - "127.0.0.1:9200:9200"
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Kibana for SIEM Dashboard
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.13.0
+    hostname: kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - SERVER_NAME=kibana
+      - SERVER_HOST=0.0.0.0
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - soc-net
+    ports:
+      - "127.0.0.1:5601:5601"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Wazuh Indexer (OpenSearch for Wazuh)
+  wazuh-indexer:
+    image: wazuh/wazuh-indexer:4.7.0
+    hostname: wazuh-indexer
+    environment:
+      - "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g"
+      - bootstrap.memory_lock=true
+      - discovery.type=single-node
+      - DISABLE_SECURITY_PLUGIN=true
+    volumes:
+      - wazuh_indexer_data:/var/lib/wazuh-indexer
+    networks:
+      - soc-net
+    ports:
+      - "127.0.0.1:9201:9200"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+    restart: unless-stopped
+
+  # Wazuh Manager
+  wazuh-manager:
+    image: wazuh/wazuh-manager:4.7.0
+    hostname: wazuh-manager
+    environment:
+      - INDEXER_URL=http://wazuh-indexer:9200
+      - INDEXER_USERNAME=""
+      - INDEXER_PASSWORD=""
+      - FILEBEAT_SSL_VERIFICATION_MODE=none
+      - API_USERNAME=wazuh
+      - API_PASSWORD=wazuh
+    volumes:
+      - wazuh_api_configuration:/var/ossec/api/configuration
+      - wazuh_etc:/var/ossec/etc
+      - wazuh_logs:/var/ossec/logs
+      - wazuh_queue:/var/ossec/queue
+      - wazuh_var_multigroups:/var/ossec/var/multigroups
+      - wazuh_integrations:/var/ossec/integrations
+      - wazuh_active_response:/var/ossec/active-response/bin
+      - wazuh_agentless:/var/ossec/agentless
+      - wazuh_wodles:/var/ossec/wodles
+      - filebeat_etc:/etc/filebeat
+      - filebeat_var:/var/lib/filebeat
+    networks:
+      - soc-net
+    ports:
+      - "127.0.0.1:1514:1514"
+      - "127.0.0.1:1515:1515"
+      - "127.0.0.1:514:514/udp"
+      - "127.0.0.1:55000:55000"
+    depends_on:
+      - wazuh-indexer
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+    restart: unless-stopped
+
+  # Wazuh Dashboard
+  wazuh-dashboard:
+    image: wazuh/wazuh-dashboard:4.7.0
+    hostname: wazuh-dashboard
+    environment:
+      - INDEXER_USERNAME=""
+      - INDEXER_PASSWORD=""
+      - WAZUH_API_URL=https://wazuh-manager
+      - DASHBOARD_USERNAME=""
+      - DASHBOARD_PASSWORD=""
+      - API_USERNAME=wazuh
+      - API_PASSWORD=wazuh
+      - OPENSEARCH_HOSTS=http://wazuh-indexer:9200
+    volumes:
+      - wazuh_dashboard_config:/usr/share/wazuh-dashboard/data/wazuh/config
+      - wazuh_dashboard_custom:/usr/share/wazuh-dashboard/plugins/wazuh/public/assets/custom
+    depends_on:
+      - wazuh-indexer
+      - wazuh-manager
+    networks:
+      - soc-net
+    ports:
+      - "127.0.0.1:8443:5601"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+    restart: unless-stopped
+
+  # MISP for Threat Intelligence
+  misp-db:
+    image: mysql:8.0
+    hostname: misp-db
+    environment:
+      - MYSQL_ROOT_PASSWORD=password
+      - MYSQL_DATABASE=misp
+      - MYSQL_USER=misp
+      - MYSQL_PASSWORD=misp
+    volumes:
+      - misp_db_data:/var/lib/mysql
+    networks:
+      - soc-net
+    restart: unless-stopped
+
+  misp-redis:
+    image: redis:7-alpine
+    hostname: misp-redis
+    networks:
+      - soc-net
+    restart: unless-stopped
+
+  misp:
+    image: coolacid/misp-docker:core-latest
+    hostname: misp
+    environment:
+      - MYSQL_HOST=misp-db
+      - MYSQL_DATABASE=misp
+      - MYSQL_USER=misp
+      - MYSQL_PASSWORD=misp
+      - REDIS_FQDN=misp-redis
+      - MISP_ADMIN_EMAIL=admin@misp.local
+      - MISP_ADMIN_PASSPHRASE=admin
+      - MISP_BASEURL=http://localhost:8080
+    depends_on:
+      - misp-db
+      - misp-redis
+    networks:
+      - soc-net
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - misp_data:/var/www/MISP
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+    restart: unless-stopped
+
+  # TheHive for SOAR
+  thehive-db:
+    image: cassandra:3.11
+    hostname: thehive-db
+    environment:
+      - CASSANDRA_CLUSTER_NAME=thp
+    volumes:
+      - thehive_db_data:/var/lib/cassandra
+    networks:
+      - soc-net
+    restart: unless-stopped
+
+  thehive:
+    image: thehiveproject/thehive:5.2
+    hostname: thehive
+    environment:
+      - JVM_OPTS=-Xms1G -Xmx1G
+    depends_on:
+      - thehive-db
+    volumes:
+      - thehive_data:/opt/thehive/data
+      - thehive_index:/opt/thehive/index
+    networks:
+      - soc-net
+    ports:
+      - "127.0.0.1:9000:9000"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+    restart: unless-stopped
+
+  # Cortex for analyzers
+  cortex:
+    image: thehiveproject/cortex:3.1.7
+    hostname: cortex
+    environment:
+      - JVM_OPTS=-Xms256m -Xmx1g
+    volumes:
+      - cortex_data:/var/lib/cortex
+    networks:
+      - soc-net
+    ports:
+      - "127.0.0.1:9001:9001"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+    restart: unless-stopped
+
+  # Ollama AI Engine
+  ollama:
+    image: ollama/ollama:latest
+    hostname: ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+      - OLLAMA_HOST=0.0.0.0:11434
+    networks:
+      - soc-net
+    ports:
+      - "127.0.0.1:11434:11434"
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:11434/api/version || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # AI Chat Interface for Log Analysis
+  ai-chat:
+    build: ./ai-chat
+    hostname: ai-chat
+    environment:
+      - OLLAMA_URL=http://ollama:11434
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - WAZUH_API_URL=http://wazuh-manager:55000
+    depends_on:
+      - ollama
+      - elasticsearch
+    networks:
+      - soc-net
+    ports:
+      - "127.0.0.1:8888:8888"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+    restart: unless-stopped
+
+  # Threat Hunting Interface
+  threat-hunting:
+    build: ./threat-hunting
+    hostname: threat-hunting
+    environment:
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - MISP_URL=http://misp:80
+      - WAZUH_URL=http://wazuh-manager:55000
+    depends_on:
+      - elasticsearch
+      - misp
+    networks:
+      - soc-net
+    ports:
+      - "127.0.0.1:7777:7777"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+    restart: unless-stopped
+
+  # Central SOC Dashboard
+  soc-dashboard:
+    build: ./soc-dashboard
+    hostname: soc-dashboard
+    environment:
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - KIBANA_URL=http://kibana:5601
+      - WAZUH_URL=http://wazuh-dashboard:5601
+      - MISP_URL=http://misp:80
+      - THEHIVE_URL=http://thehive:9000
+      - CORTEX_URL=http://cortex:9001
+      - AI_CHAT_URL=http://ai-chat:8888
+      - THREAT_HUNTING_URL=http://threat-hunting:7777
+    depends_on:
+      - elasticsearch
+      - kibana
+      - wazuh-dashboard
+      - misp
+      - thehive
+    networks:
+      - soc-net
+    ports:
+      - "127.0.0.1:3000:3000"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.25'
+    restart: unless-stopped
+
+volumes:
+  elasticsearch_data:
+  wazuh_indexer_data:
+  wazuh_api_configuration:
+  wazuh_etc:
+  wazuh_logs:
+  wazuh_queue:
+  wazuh_var_multigroups:
+  wazuh_integrations:
+  wazuh_active_response:
+  wazuh_agentless:
+  wazuh_wodles:
+  filebeat_etc:
+  filebeat_var:
+  wazuh_dashboard_config:
+  wazuh_dashboard_custom:
+  misp_db_data:
+  misp_data:
+  thehive_db_data:
+  thehive_data:
+  thehive_index:
+  cortex_data:
+  ollama_data:
+
+networks:
+  soc-net:
+    driver: bridge

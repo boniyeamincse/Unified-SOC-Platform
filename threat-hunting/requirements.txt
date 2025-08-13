@@ -1,0 +1,7 @@
+flask==3.0.0
+flask-cors==4.0.0
+requests==2.31.0
+elasticsearch==8.11.1
+yara-python==4.3.1
+sigma==0.21.4
+misp-lib==0.1.4

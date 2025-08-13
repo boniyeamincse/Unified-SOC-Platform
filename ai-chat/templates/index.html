@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 SOC AI Assistant</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: rgba(0,0,0,0.3);
+            padding: 15px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .header h1 {
+            font-size: 1.5em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .status {
+            font-size: 0.9em;
+            opacity: 0.8;
+            margin-top: 5px;
+        }
+        
+        .container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+        
+        .sidebar {
+            width: 300px;
+            background: rgba(0,0,0,0.2);
+            padding: 20px;
+            border-right: 1px solid rgba(255,255,255,0.2);
+            overflow-y: auto;
+        }
+        
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .chat-area {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .message {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 15px;
+            border-left: 4px solid #4CAF50;
+        }
+        
+        .message.user {
+            border-left-color: #2196F3;
+            background: rgba(33, 150, 243, 0.2);
+            margin-left: 20%;
+        }
+        
+        .message.ai {
+            border-left-color: #FF9800;
+            background: rgba(255, 152, 0, 0.2);
+            margin-right: 20%;
+        }
+        
+        .message.error {
+            border-left-color: #f44336;
+            background: rgba(244, 67, 54, 0.2);
+        }
+        
+        .input-area {
+            background: rgba(0,0,0,0.3);
+            padding: 20px;
+            border-top: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .input-form {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .input-row {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+            align-items: center;
+        }
+        
+        input, select, textarea {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 5px;
+            padding: 10px;
+            color: white;
+            font-size: 14px;
+        }
+        
+        input::placeholder, textarea::placeholder {
+            color: rgba(255,255,255,0.6);
+        }
+        
+        #questionInput {
+            flex: 1;
+            min-height: 40px;
+            resize: vertical;
+        }
+        
+        #queryInput {
+            flex: 2;
+        }
+        
+        #timeRange {
+            width: 100px;
+        }
+        
+        button {
+            background: #4CAF50;
+            border: none;
+            border-radius: 5px;
+            padding: 10px 20px;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+        
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        
+        .sidebar-section {
+            margin-bottom: 25px;
+        }
+        
+        .sidebar-section h3 {
+            font-size: 1em;
+            margin-bottom: 10px;
+            color: #4CAF50;
+        }
+        
+        .quick-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .quick-action {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            border-radius: 5px;
+            padding: 8px 12px;
+            color: white;
+            cursor: pointer;
+            font-size: 12px;
+            text-align: left;
+        }
+        
+        .quick-action:hover {
+            background: rgba(255,255,255,0.2);
+        }
+        
+        .alerts-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .alert-item {
+            background: rgba(255,152,0,0.2);
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+        
+        .alert-level {
+            font-weight: bold;
+            color: #FF9800;
+        }
+        
+        .loading {
+            opacity: 0.6;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+        
+        .timestamp {
+            font-size: 0.8em;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🤖 SOC AI Assistant</h1>
+        <div class="status" id="status">Connecting...</div>
+    </div>
+    
+    <div class="container">
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <h3>🎯 Quick Actions</h3>
+                <div class="quick-actions">
+                    <button class="quick-action" onclick="quickAnalysis('failed login attempts')">Failed Logins</button>
+                    <button class="quick-action" onclick="quickAnalysis('malware detection')">Malware Alerts</button>
+                    <button class="quick-action" onclick="quickAnalysis('network anomalies')">Network Anomalies</button>
+                    <button class="quick-action" onclick="quickAnalysis('privilege escalation')">Privilege Escalation</button>
+                    <button class="quick-action" onclick="quickAnalysis('file integrity violations')">File Changes</button>
+                    <button class="quick-action" onclick="getAlerts()">Recent Alerts</button>
+                </div>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3>🔍 Threat Hunt</h3>
+                <input type="text" id="huntInput" placeholder="IP, Domain, or Hash" style="width: 100%; margin-bottom: 10px;">
+                <button onclick="threatHunt()" style="width: 100%; background: #FF9800;">Hunt</button>
+            </div>
+            
+            <div class="sidebar-section">
+                <h3>⚠️ Recent Alerts</h3>
+                <div class="alerts-list" id="alertsList">
+                    <div class="alert-item">Loading alerts...</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="chat-area" id="chatArea">
+                <div class="message">
+                    <strong>🤖 SOC AI Assistant</strong><br>
+                    Welcome! I can help you analyze security logs, investigate alerts, and hunt for threats.<br>
+                    <br>
+                    <strong>What I can do:</strong><br>
+                    • Analyze logs with natural language questions<br>
+                    • Search for specific security events<br>
+                    • Investigate threat indicators<br>
+                    • Provide actionable recommendations<br>
+                    <br>
+                    Try asking: "What suspicious activities happened in the last hour?"
+                </div>
+            </div>
+            
+            <div class="input-area">
+                <div class="input-form">
+                    <div class="input-row">
+                        <textarea id="questionInput" placeholder="Ask me about your security logs..." rows="2"></textarea>
+                        <button onclick="analyzeQuestion()" id="askButton">🔍 Analyze</button>
+                    </div>
+                    <div class="input-row">
+                        <input type="text" id="queryInput" placeholder="Optional: Specific log query (e.g., 'error AND login')">
+                        <select id="timeRange">
+                            <option value="1h">1 hour</option>
+                            <option value="24h">24 hours</option>
+                            <option value="7d">7 days</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        
+        socket.on('connect', function() {
+            document.getElementById('status').textContent = 'Connected ✅';
+        });
+        
+        socket.on('disconnect', function() {
+            document.getElementById('status').textContent = 'Disconnected ❌';
+        });
+        
+        socket.on('status', function(data) {
+            document.getElementById('status').textContent = data.msg;
+        });
+        
+        socket.on('response', function(data) {
+            const chatArea = document.getElementById('chatArea');
+            const message = document.createElement('div');
+            message.className = 'message ai';
+            
+            if (data.error) {
+                message.className = 'message error';
+                message.innerHTML = `<strong>❌ Error:</strong><br>${data.error}`;
+            } else {
+                message.innerHTML = `
+                    <strong>🤖 Analysis Result</strong><br>
+                    ${data.analysis}<br>
+                    <div class="timestamp">
+                        📊 Found ${data.logs_found} logs | Query: ${data.query} | Range: ${data.time_range}
+                    </div>
+                `;
+            }
+            
+            chatArea.appendChild(message);
+            chatArea.scrollTop = chatArea.scrollHeight;
+            
+            document.getElementById('askButton').disabled = false;
+            document.getElementById('askButton').textContent = '🔍 Analyze';
+        });
+        
+        socket.on('alerts', function(data) {
+            const alertsList = document.getElementById('alertsList');
+            alertsList.innerHTML = '';
+            
+            if (data.alerts.length === 0) {
+                alertsList.innerHTML = '<div class="alert-item">No recent alerts</div>';
+                return;
+            }
+            
+            data.alerts.forEach(alert => {
+                const alertElement = document.createElement('div');
+                alertElement.className = 'alert-item';
+                alertElement.innerHTML = `
+                    <div class="alert-level">Level ${alert.level}</div>
+                    <div>${alert.rule}</div>
+                    <div style="font-size: 10px; margin-top: 5px;">${alert.agent}</div>
+                `;
+                alertsList.appendChild(alertElement);
+            });
+        });
+        
+        socket.on('hunt_results', function(data) {
+            const chatArea = document.getElementById('chatArea');
+            const message = document.createElement('div');
+            message.className = 'message ai';
+            
+            let results = '<strong>🔍 Threat Hunt Results</strong><br><br>';
+            
+            data.results.forEach(result => {
+                results += `<strong>Indicator:</strong> ${result.indicator.value} (${result.indicator.type})<br>`;
+                results += `<strong>Matches:</strong> ${result.matches}<br>`;
+                if (result.matches > 0) {
+                    results += '<strong>Sample logs:</strong><br>';
+                    result.logs.forEach(log => {
+                        results += `• ${log._source.message || 'No message'}<br>`;
+                    });
+                }
+                results += '<br>';
+            });
+            
+            message.innerHTML = results;
+            chatArea.appendChild(message);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        });
+        
+        function analyzeQuestion() {
+            const question = document.getElementById('questionInput').value.trim();
+            const query = document.getElementById('queryInput').value.trim() || '*';
+            const timeRange = document.getElementById('timeRange').value;
+            
+            if (!question) {
+                alert('Please enter a question');
+                return;
+            }
+            
+            // Add user message
+            const chatArea = document.getElementById('chatArea');
+            const userMessage = document.createElement('div');
+            userMessage.className = 'message user';
+            userMessage.innerHTML = `<strong>🧑 You:</strong><br>${question}`;
+            chatArea.appendChild(userMessage);
+            chatArea.scrollTop = chatArea.scrollHeight;
+            
+            // Disable button and show loading
+            document.getElementById('askButton').disabled = true;
+            document.getElementById('askButton').textContent = '🔍 Analyzing...';
+            
+            // Send to backend
+            socket.emit('analyze_logs', {
+                question: question,
+                query: query,
+                time_range: timeRange
+            });
+            
+            // Clear input
+            document.getElementById('questionInput').value = '';
+        }
+        
+        function quickAnalysis(topic) {
+            document.getElementById('questionInput').value = `Tell me about ${topic} in our environment`;
+            analyzeQuestion();
+        }
+        
+        function getAlerts() {
+            socket.emit('get_alerts', {severity: 'medium', limit: 10});
+        }
+        
+        function threatHunt() {
+            const indicator = document.getElementById('huntInput').value.trim();
+            if (!indicator) {
+                alert('Please enter an indicator to hunt');
+                return;
+            }
+            
+            let type = 'unknown';
+            if (indicator.match(/^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$/)) {
+                type = 'ip';
+            } else if (indicator.match(/^[a-f0-9]{32}$|^[a-f0-9]{40}$|^[a-f0-9]{64}$/i)) {
+                type = 'hash';
+            } else if (indicator.includes('.')) {
+                type = 'domain';
+            }
+            
+            socket.emit('threat_hunt', {
+                indicators: [{value: indicator, type: type}]
+            });
+            
+            document.getElementById('huntInput').value = '';
+        }
+        
+        // Handle Enter key
+        document.getElementById('questionInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                analyzeQuestion();
+            }
+        });
+        
+        document.getElementById('huntInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                threatHunt();
+            }
+        });
+        
+        // Load alerts on startup
+        setTimeout(getAlerts, 2000);
+    </script>
+</body>
+</html>
